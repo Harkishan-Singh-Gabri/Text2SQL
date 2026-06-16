@@ -1,5 +1,3 @@
-# tests/test_llm.py
-
 from backend.schema import SchemaInspector
 from backend.llm import generate_sql
 
