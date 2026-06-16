@@ -42,7 +42,8 @@ class SchemaInspector:
         default_exclude=[
             "us_states",
             "customer_demographics",
-            "customer_customer_demo"
+            "customer_customer_demo",
+            "query_logs"
         ]
 
         exclude=list(set(exclude+default_exclude))
