@@ -3,7 +3,8 @@ import requests
 import pandas as pd
 import plotly.express as px
 
-API_BASE = "http://localhost:8000"
+import os
+API_BASE = os.getenv("API_BASE", "http://localhost:8000")
 
 st.set_page_config(
     page_title="Querify",
