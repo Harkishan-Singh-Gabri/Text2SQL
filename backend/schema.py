@@ -4,6 +4,8 @@ from dataclasses import dataclass, field
 from dotenv import load_dotenv
 import os
 import time
+import pandas as pd
+from sqlalchemy import create_engine
 
 load_dotenv()
 
@@ -36,6 +38,12 @@ class SchemaInspector:
             self._conn=psycopg2.connect(self.connection_string)
         return self._conn
     
+    def load_csv(self, file, table_name="uploaded_data"):
+        engine = create_engine(self.connection_string)
+        df = pd.read_csv(file)
+        df.to_sql(table_name, engine, if_exists="replace", index=False, method="multi", chunksize=5000)
+        return table_name, len(df), list(df.columns)
+
     def get_tables(self, exclude: list[str]=None) ->list[str]:
         exclude=exclude or []
 

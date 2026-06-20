@@ -2,7 +2,6 @@ import streamlit as st
 import requests
 import pandas as pd
 import plotly.express as px
-import json
 
 API_BASE = "http://localhost:8000"
 
@@ -43,6 +42,21 @@ st.markdown("""
     color: #94a3b8;
     font-weight: 400;
     margin: 0;
+}
+
+/* upload section */
+.upload-section {
+    background: #fafafa;
+    border: 1px dashed #e2e8f0;
+    border-radius: 12px;
+    padding: 1.25rem 1.5rem;
+    margin-bottom: 1.5rem;
+}
+.upload-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #475569;
+    margin-bottom: 0.5rem;
 }
 
 /* search box */
@@ -102,22 +116,6 @@ div[data-testid="stHorizontalBlock"] .stButton > button:hover {
     gap: 0.5rem;
     justify-content: center;
     margin: 1.2rem 0 2rem 0;
-}
-.chip {
-    background: #f8fafc;
-    border: 1px solid #e2e8f0;
-    border-radius: 20px;
-    padding: 0.35rem 0.85rem;
-    font-size: 0.8rem;
-    color: #475569;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-}
-.chip:hover {
-    background: #ede9fe;
-    border-color: #a5b4fc;
-    color: #4f46e5;
 }
 
 /* result card */
@@ -199,16 +197,15 @@ div[data-testid="stHorizontalBlock"] .stButton > button:hover {
 
 hr { border-color: #f1f5f9; margin: 1.25rem 0; }
 
-/* hide index col */
 .dataframe { font-size: 0.85rem; }
 </style>
 """, unsafe_allow_html=True)
 
 
-# --- helpers ---
+# helpers
 def query_api(question: str) -> dict:
     try:
-        r = requests.post(f"{API_BASE}/query", json={"question": question}, timeout=60)
+        r = requests.post(f"{API_BASE}/query", json={"question": question}, timeout=180)
         return r.json()
     except Exception as e:
         return {"success": False, "error": str(e), "rows": None, "sql": None,
@@ -216,8 +213,16 @@ def query_api(question: str) -> dict:
                 "truncated": False, "log_id": None, "columns": []}
 
 
+def upload_csv(file) -> dict:
+    try:
+        files = {"file": (file.name, file.getvalue(), "text/csv")}
+        r = requests.post(f"{API_BASE}/upload", files=files, timeout=60)
+        return r.json()
+    except Exception as e:
+        return {"error": str(e)}
+
+
 def fmt(value):
-    """Smart number formatter for display."""
     if isinstance(value, float):
         if value > 1000:
             return f"${value:,.2f}"
@@ -226,7 +231,6 @@ def fmt(value):
 
 
 def format_df(df: pd.DataFrame) -> pd.DataFrame:
-    """Apply smart formatting to dataframe columns."""
     df = df.copy()
     for col in df.columns:
         if pd.api.types.is_float_dtype(df[col]):
@@ -240,7 +244,6 @@ def format_df(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def smart_chart(df: pd.DataFrame):
-    """Render the most appropriate chart for the data shape."""
     if df.shape[1] < 2:
         return
 
@@ -248,7 +251,6 @@ def smart_chart(df: pd.DataFrame):
     x_col = cols[0]
     y_col = cols[1]
 
-    # detect numeric column for charting
     raw_df = df.copy()
     for col in raw_df.columns:
         raw_df[col] = pd.to_numeric(
@@ -259,21 +261,15 @@ def smart_chart(df: pd.DataFrame):
     if not pd.api.types.is_numeric_dtype(raw_df[y_col]):
         return
 
-    # time series — line chart
     if any(k in x_col.lower() for k in ["date", "month", "year", "time", "period"]):
         fig = px.line(raw_df, x=x_col, y=y_col,
                       markers=True, color_discrete_sequence=["#6366f1"])
-        chart_type = "line"
-    # many categories or long labels — horizontal bar
     elif len(raw_df) > 6 or raw_df[x_col].astype(str).str.len().max() > 12:
         fig = px.bar(raw_df, x=y_col, y=x_col,
                      orientation='h', color_discrete_sequence=["#6366f1"])
-        chart_type = "hbar"
-    # few categories — vertical bar
     else:
         fig = px.bar(raw_df, x=x_col, y=y_col,
                      color_discrete_sequence=["#6366f1"])
-        chart_type = "bar"
 
     fig.update_layout(
         plot_bgcolor="white",
@@ -288,17 +284,18 @@ def smart_chart(df: pd.DataFrame):
     st.plotly_chart(fig, use_container_width=True)
 
 
-# --- session state ---
+# session state
 for key, default in [
     ("question_input", ""),
     ("last_result", None),
     ("query_history", []),
+    ("active_dataset", "Northwind (default)"),
 ]:
     if key not in st.session_state:
         st.session_state[key] = default
 
 
-# --- sidebar — query history ---
+# sidebar — query history
 with st.sidebar:
     st.markdown("""
     <p style="font-size:0.75rem;font-weight:600;color:#94a3b8;
@@ -327,7 +324,7 @@ with st.sidebar:
             st.rerun()
 
 
-# --- hero ---
+# hero
 st.markdown("""
 <div class="hero">
     <div class="hero-logo">Quer<span>ify</span></div>
@@ -336,7 +333,34 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# --- example chips (rendered as buttons, styled as chips) ---
+# upload section
+st.markdown('<div class="upload-section">', unsafe_allow_html=True)
+st.markdown(f'<p class="upload-label">Currently querying: {st.session_state.active_dataset}</p>',
+            unsafe_allow_html=True)
+
+uploaded_file = st.file_uploader(
+    "Upload your own CSV to query instead",
+    type="csv",
+    label_visibility="collapsed"
+)
+
+if uploaded_file is not None:
+    if st.button("Load this data", use_container_width=True):
+        with st.spinner("Loading data..."):
+            result = upload_csv(uploaded_file)
+        if "error" not in result:
+            st.session_state.active_dataset = uploaded_file.name
+            st.session_state.last_result = None
+            st.success(
+                f"Loaded {result['row_count']} rows · "
+                f"Columns: {', '.join(result['columns'][:6])}"
+                f"{'...' if len(result['columns']) > 6 else ''}"
+            )
+        else:
+            st.error(f"Upload failed: {result['error']}")
+
+st.markdown('</div>', unsafe_allow_html=True)
+
 examples = [
     "Which 5 customers placed the most orders?",
     "Total revenue per product category",
@@ -354,7 +378,7 @@ for i, example in enumerate(examples):
 
 st.markdown("<div style='margin-top:0.5rem'></div>", unsafe_allow_html=True)
 
-# --- search input ---
+# search input
 question = st.text_input(
     label="question",
     value=st.session_state.question_input,
@@ -373,31 +397,15 @@ if clear:
     st.session_state.last_result = None
     st.rerun()
 
-# --- run query ---
+# run query
 if run and question.strip():
     status_placeholder = st.empty()
-
     status_placeholder.markdown("""
     <div style="text-align:center;padding:1rem;color:#94a3b8;font-size:0.85rem">
-        Fetching schema...
-    </div>""", unsafe_allow_html=True)
-
-    import time
-    time.sleep(0.3)
-
-    status_placeholder.markdown("""
-    <div style="text-align:center;padding:1rem;color:#94a3b8;font-size:0.85rem">
-        Generating SQL...
+        Generating SQL and running query...
     </div>""", unsafe_allow_html=True)
 
     result = query_api(question)
-
-    status_placeholder.markdown("""
-    <div style="text-align:center;padding:1rem;color:#94a3b8;font-size:0.85rem">
-        Executing query...
-    </div>""", unsafe_allow_html=True)
-
-    time.sleep(0.2)
     status_placeholder.empty()
 
     st.session_state.last_result = result
@@ -409,14 +417,13 @@ if run and question.strip():
     st.rerun()
 
 
-# --- results ---
+# results
 result = st.session_state.last_result
 
 if result:
     with st.container():
         st.markdown('<div class="result-card">', unsafe_allow_html=True)
 
-        # status pills
         status_cls = "pill-success" if result.get("success") else "pill-failed"
         status_txt = "Success" if result.get("success") else "Failed"
         retries = result.get("retries", 0)
@@ -432,7 +439,6 @@ if result:
         </div>
         """, unsafe_allow_html=True)
 
-        # error state
         if not result.get("success"):
             st.markdown(f"""
             <div style="background:#fef2f2;border:1px solid #fecaca;border-radius:8px;
@@ -445,8 +451,10 @@ if result:
             rows = result.get("rows", [])
             df_raw = pd.DataFrame(rows) if rows else pd.DataFrame()
 
-            # single value — big stat card
             if df_raw.shape == (1, 1):
+                st.markdown('<p class="section-label">Generated SQL</p>', unsafe_allow_html=True)
+                st.code(result.get("sql", ""), language="sql")
+
                 val = list(rows[0].values())[0]
                 col_name = list(rows[0].keys())[0]
                 display_val = f"{int(val):,}" if isinstance(val, (int, float)) and val == int(val) else fmt(val)
@@ -458,14 +466,12 @@ if result:
                 """, unsafe_allow_html=True)
 
             else:
-                # generated SQL
                 st.markdown('<p class="section-label">Generated SQL</p>', unsafe_allow_html=True)
                 st.code(result.get("sql", ""), language="sql")
 
                 if result.get("truncated"):
                     st.warning("Results limited to 500 rows.")
 
-                # formatted results table
                 st.markdown('<p class="section-label">Results</p>', unsafe_allow_html=True)
                 df_display = format_df(df_raw)
                 st.dataframe(
@@ -475,12 +481,10 @@ if result:
                     height=min(380, 60 + len(df_display) * 35)
                 )
 
-                # smart chart
                 if df_raw.shape[1] == 2:
                     st.markdown('<p class="section-label">Chart</p>', unsafe_allow_html=True)
                     smart_chart(df_raw)
 
-            # insights link
             if rows and len(rows) > 0:
                 st.markdown("<hr>", unsafe_allow_html=True)
                 st.markdown("""

@@ -3,6 +3,8 @@
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from main import Text2SQLPipeline
+from fastapi import UploadFile, File
+import io
 
 app = FastAPI(
     title="Text2SQL API",
@@ -29,6 +31,18 @@ class QueryResponse(BaseModel):
     error: str | None
     log_id: int | None
 
+@app.post("/upload")
+async def upload_csv(file: UploadFile = File(...)):
+    contents = await file.read()
+    table_name, row_count, columns = pipeline.schema_inspector.load_csv(
+        io.BytesIO(contents)
+    )
+    pipeline._schema_cache = None 
+    return {
+        "table_name": table_name,
+        "row_count": row_count,
+        "columns": columns
+    }
 
 @app.get("/health")
 def health():
