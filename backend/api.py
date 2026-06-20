@@ -5,11 +5,21 @@ from pydantic import BaseModel
 from main import Text2SQLPipeline
 from fastapi import UploadFile, File
 import io
+from fastapi.middleware.cors import CORSMiddleware
+
 
 app = FastAPI(
     title="Text2SQL API",
     description="Natural language to SQL query engine",
     version="1.0.0"
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 pipeline = Text2SQLPipeline()
