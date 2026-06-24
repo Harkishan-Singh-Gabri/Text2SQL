@@ -38,35 +38,7 @@ No write access is ever permitted — the system is read-only by design, enforce
  
 ## Architecture
  
-+----------------------+
-|   Streamlit UI       |  Home . Insights
-|  (query + upload)    |
-+----------+-----------+
-           | REST
-+----------v-----------+
-|     FastAPI          |  /query  /upload
-|                      |  /metrics /logs
-+----------+-----------+
-           |
-   +-------+----------------------+
-   |               |              |
-+--v--------+  +---v---------+  +-v------------+
-| Schema    |  |  LLM Layer  |  | SQL Validator|
-| Inspector |  | (Groq/3.3)  |  | (sqlglot AST)|
-+--+--------+  +---+---------+  +-+------------+
-   |               |                |
-   |        +------v------+         |
-   +------->| Self-Correct|<--------+
-            |  Retry Loop |
-            +------+------+
-                   |
-            +------v------+
-            | Query Exec  |  (PostgreSQL)
-            +------+------+
-                   |
-            +------v------+
-            | Metrics Log |  query_logs
-            +-------------+
+![Architecture diagram](screenshot/querify_architecture.png)
  
 **Why it's built this way:**
  
