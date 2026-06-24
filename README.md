@@ -28,7 +28,7 @@ No write access is ever permitted — the system is read-only by design, enforce
  
 | Home — Query Interface | Insights — AI Analysis |
 |---|---|
-| ![Home screenshot](screenshot\home.png) | ![Insights screenshot](screenshot\insights.png) |
+| ![Home screenshot](screenshot/home.png) | ![Insights screenshot](screenshot/insights.png) |
  
 **Try it yourself:**
 - *"Which 5 customers placed the most orders?"*
@@ -38,37 +38,35 @@ No write access is ever permitted — the system is read-only by design, enforce
  
 ## Architecture
  
-```
-                    ┌─────────────────────┐
-                    │   Streamlit UI       │  Home · Insights
-                    │  (query + upload)    │
-                    └──────────┬───────────┘
-                               │ REST
-                    ┌──────────▼───────────┐
-                    │     FastAPI           │  /query  /upload
-                    │                       │  /metrics /logs
-                    └──────────┬───────────┘
-                               │
-        ┌──────────────────────┼──────────────────────┐
-        │                      │                      │
-┌───────▼────────┐   ┌─────────▼─────────┐   ┌────────▼────────┐
-│ Schema Inspector │   │   LLM Layer        │   │  SQL Validator   │
-│ (introspection)  │   │  (Groq / Llama 3.3)│   │  (sqlglot AST)   │
-└───────┬─────────┘   └─────────┬──────────┘   └────────┬────────┘
-        │                       │                        │
-        │              ┌────────▼────────┐               │
-        └─────────────►│  Self-Correction │◄──────────────┘
-                       │   Retry Loop      │
-                       └────────┬──────────┘
-                                │
-                       ┌────────▼──────────┐
-                       │  Query Executor    │  (PostgreSQL)
-                       └────────┬──────────┘
-                                │
-                       ┌────────▼──────────┐
-                       │  Metrics Logger    │  query_logs table
-                       └───────────────────┘
-```
++----------------------+
+|   Streamlit UI       |  Home . Insights
+|  (query + upload)    |
++----------+-----------+
+           | REST
++----------v-----------+
+|     FastAPI          |  /query  /upload
+|                      |  /metrics /logs
++----------+-----------+
+           |
+   +-------+----------------------+
+   |               |              |
++--v--------+  +---v---------+  +-v------------+
+| Schema    |  |  LLM Layer  |  | SQL Validator|
+| Inspector |  | (Groq/3.3)  |  | (sqlglot AST)|
++--+--------+  +---+---------+  +-+------------+
+   |               |                |
+   |        +------v------+         |
+   +------->| Self-Correct|<--------+
+            |  Retry Loop |
+            +------+------+
+                   |
+            +------v------+
+            | Query Exec  |  (PostgreSQL)
+            +------+------+
+                   |
+            +------v------+
+            | Metrics Log |  query_logs
+            +-------------+
  
 **Why it's built this way:**
  
