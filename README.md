@@ -1,4 +1,3 @@
-me · MD
 # Querify
  
 **Ask anything about your data in plain English.**
